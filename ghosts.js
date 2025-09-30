@@ -345,6 +345,11 @@ const GhostsModule = (function() {
                     }
                 });
 
+                // Reset ghost combo in score manager
+                if (typeof ScoreManager !== 'undefined') {
+                    ScoreManager.resetGhostCombo();
+                }
+
                 console.log('Power mode ended');
             }
         }

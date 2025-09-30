@@ -223,23 +223,20 @@ const PlayerModule = (function() {
 
         if (eatenDot) {
             if (eatenDot.type === CONFIG.DOT) {
-                console.log('Ate a dot!');
-                // Future: Add score increment
+                // Add score for dot
+                if (typeof ScoreManager !== 'undefined') {
+                    ScoreManager.addDotScore();
+                }
             } else if (eatenDot.type === CONFIG.POWER_PELLET) {
-                console.log('Ate a power pellet!');
+                // Add score for power pellet
+                if (typeof ScoreManager !== 'undefined') {
+                    ScoreManager.addPowerPelletScore();
+                }
+
                 // Trigger ghost vulnerable state
                 if (typeof GhostsModule !== 'undefined') {
                     GhostsModule.activatePowerMode();
                 }
-            }
-
-            // Check if all dots eaten
-            const remainingDots = DotsModule.getActiveDotCount();
-            console.log(`Remaining dots: ${remainingDots}`);
-
-            if (remainingDots === 0) {
-                console.log('Level complete!');
-                // Future: Trigger level complete state
             }
         }
     }

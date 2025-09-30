@@ -8,6 +8,7 @@ const Game = (function() {
     let frameCount = 0;
     let fpsCounter = 0;
     let lastFpsUpdate = 0;
+    let ghostScorePopup = null; // For displaying ghost score popup
 
     /**
      * Initialize the game
@@ -18,6 +19,11 @@ const Game = (function() {
 
             // Initialize renderer
             ctx = RendererModule.init();
+
+            // Initialize game state management
+            StateManager.init();
+            ScoreManager.init();
+            LivesManager.init();
 
             // Initialize dots from map
             DotsModule.initDots();
@@ -41,6 +47,46 @@ const Game = (function() {
     }
 
     /**
+     * Reset game for new game (after game over)
+     */
+    function resetGame() {
+        // Reset all managers
+        StateManager.reset();
+        ScoreManager.reset();
+        LivesManager.reset();
+
+        // Reset game objects
+        DotsModule.resetDots();
+        PlayerModule.init();
+        GhostsModule.reset();
+
+        ghostScorePopup = null;
+
+        console.log('Game reset for new game');
+    }
+
+    /**
+     * Reset for next level
+     */
+    function resetLevel() {
+        // Keep score and lives, reset level
+        ScoreManager.resetForNewLevel();
+        LivesManager.resetForNewLevel();
+
+        // Reset game objects
+        DotsModule.resetDots();
+        PlayerModule.init();
+        GhostsModule.reset();
+
+        // Transition back to ready state
+        StateManager.transitionTo(StateManager.GAME_STATE.READY);
+
+        ghostScorePopup = null;
+
+        console.log('Level reset for next level');
+    }
+
+    /**
      * Handle keyboard input
      * @param {KeyboardEvent} event - Keyboard event
      */
@@ -50,7 +96,20 @@ const Game = (function() {
             event.preventDefault();
         }
 
-        PlayerModule.handleInput(event.key);
+        // Handle state-specific input (pause, restart)
+        const stateHandled = StateManager.handleInput(event.key);
+
+        // If state changed to READY from GAME_OVER, reset game
+        if (stateHandled && StateManager.isState(StateManager.GAME_STATE.READY)) {
+            if (LivesManager.isGameOver()) {
+                resetGame();
+            }
+        }
+
+        // Only allow player input during active play
+        if (StateManager.isPlaying()) {
+            PlayerModule.handleInput(event.key);
+        }
     }
 
     /**
@@ -123,6 +182,22 @@ const Game = (function() {
      * @param {number} deltaTime - Time since last update
      */
     function update(deltaTime) {
+        // Update state manager (handles READY timer, etc.)
+        StateManager.update(deltaTime);
+
+        // Update lives manager (respawn timer)
+        const respawnComplete = LivesManager.update(deltaTime);
+
+        // Only update gameplay if in PLAYING state
+        if (!StateManager.isPlaying()) {
+            return;
+        }
+
+        // Skip gameplay updates during respawn delay
+        if (LivesManager.isRespawning()) {
+            return;
+        }
+
         // Update player movement and state
         PlayerModule.update(deltaTime);
 
@@ -137,12 +212,67 @@ const Game = (function() {
 
         if (collision.playerEaten) {
             console.log('Player was caught by', collision.ghost.name);
-            PlayerModule.die();
-            // Reset ghosts as well
-            GhostsModule.reset();
+
+            // Decrement lives
+            const gameOver = LivesManager.decrementLives();
+
+            if (gameOver) {
+                // Trigger game over
+                StateManager.triggerGameOver();
+            } else {
+                // Reset player and ghosts for respawn
+                PlayerModule.die();
+                GhostsModule.reset();
+            }
         } else if (collision.ghostEaten) {
             console.log('Player ate', collision.ghost.name);
-            // Future: Add score increment
+
+            // Add score for eating ghost
+            const points = ScoreManager.addGhostScore();
+
+            // Show score popup at ghost position
+            ghostScorePopup = {
+                score: points,
+                x: collision.ghost.position.x,
+                y: collision.ghost.position.y,
+                timestamp: Date.now(),
+                duration: 1000 // Show for 1 second
+            };
+        }
+
+        // Check for level completion
+        checkLevelComplete();
+
+        // Update ghost score popup
+        updateGhostScorePopup();
+    }
+
+    /**
+     * Check if level is complete (all dots eaten)
+     */
+    function checkLevelComplete() {
+        const remainingDots = DotsModule.getActiveDotCount();
+
+        if (remainingDots === 0) {
+            console.log('Level complete!');
+            StateManager.triggerLevelComplete();
+
+            // Delay level reset
+            setTimeout(() => {
+                resetLevel();
+            }, 3000); // 3 second delay
+        }
+    }
+
+    /**
+     * Update ghost score popup timer
+     */
+    function updateGhostScorePopup() {
+        if (ghostScorePopup) {
+            const elapsed = Date.now() - ghostScorePopup.timestamp;
+            if (elapsed > ghostScorePopup.duration) {
+                ghostScorePopup = null;
+            }
         }
     }
 
@@ -162,10 +292,22 @@ const Game = (function() {
         // Render ghosts (before player for proper layering)
         GhostsModule.render(ctx);
 
-        // Render player
-        PlayerModule.render(ctx);
+        // Render player (only if not in game over state)
+        if (!StateManager.isState(StateManager.GAME_STATE.GAME_OVER)) {
+            PlayerModule.render(ctx);
+        }
 
-        // Future: Render UI, effects, etc.
+        // Render UI (top bar, messages, etc.)
+        const gameState = {
+            state: StateManager.getState(),
+            score: ScoreManager.getScore(),
+            level: ScoreManager.getLevel(),
+            lives: LivesManager.getLives(),
+            lastGhostScore: ghostScorePopup ? ghostScorePopup.score : null,
+            ghostScorePosition: ghostScorePopup ? { x: ghostScorePopup.x, y: ghostScorePopup.y } : null
+        };
+
+        UIRenderer.render(ctx, gameState);
     }
 
     /**
