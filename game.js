@@ -22,6 +22,12 @@ const Game = (function() {
             // Initialize dots from map
             DotsModule.initDots();
 
+            // Initialize player at starting position
+            PlayerModule.init();
+
+            // Setup keyboard controls
+            window.addEventListener('keydown', handleKeyPress);
+
             console.log('Game initialized successfully');
 
             // Start the game loop
@@ -29,6 +35,19 @@ const Game = (function() {
         } catch (error) {
             console.error('Failed to initialize game:', error);
         }
+    }
+
+    /**
+     * Handle keyboard input
+     * @param {KeyboardEvent} event - Keyboard event
+     */
+    function handleKeyPress(event) {
+        // Prevent default arrow key behavior (scrolling)
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            event.preventDefault();
+        }
+
+        PlayerModule.handleInput(event.key);
     }
 
     /**
@@ -101,8 +120,10 @@ const Game = (function() {
      * @param {number} deltaTime - Time since last update
      */
     function update(deltaTime) {
-        // Future: Update player position, ghost AI, collisions, etc.
-        // For now, this is just a placeholder for the rendering system
+        // Update player movement and state
+        PlayerModule.update(deltaTime);
+
+        // Future: Update ghost AI, game state, etc.
     }
 
     /**
@@ -118,7 +139,10 @@ const Game = (function() {
         // Render dots and power pellets
         DotsModule.renderDots(ctx);
 
-        // Future: Render player, ghosts, UI, etc.
+        // Render player
+        PlayerModule.render(ctx);
+
+        // Future: Render ghosts, UI, effects, etc.
     }
 
     /**

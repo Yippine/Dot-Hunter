@@ -25,5 +25,23 @@ const CONFIG = {
 
     // Game settings
     FPS: 60,
-    FRAME_INTERVAL: 1000 / 60 // ~16.67ms
+    FRAME_INTERVAL: 1000 / 60, // ~16.67ms
+
+    // Player settings
+    PLAYER_SPEED: 2.5, // Cells per second
+    PLAYER_RADIUS: 8,
+    PLAYER_START_POS: {
+        row: 23,
+        col: 14
+    },
+    PLAYER_COLOR: '#ffff00',
+
+    // Direction constants
+    DIRECTIONS: {
+        UP: { row: -1, col: 0, angle: 1.5 * Math.PI },
+        DOWN: { row: 1, col: 0, angle: 0.5 * Math.PI },
+        LEFT: { row: 0, col: -1, angle: Math.PI },
+        RIGHT: { row: 0, col: 1, angle: 0 },
+        NONE: { row: 0, col: 0, angle: 0 }
+    }
 };
