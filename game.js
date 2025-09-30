@@ -20,6 +20,10 @@ const Game = (function() {
             // Initialize renderer
             ctx = RendererModule.init();
 
+            // Initialize canvas scaler for responsive display
+            const canvas = RendererModule.getCanvas();
+            CanvasScaler.initialize(canvas);
+
             // Initialize game state management
             StateManager.init();
             ScoreManager.init();

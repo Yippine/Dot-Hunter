@@ -23,7 +23,9 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 20px;
-    padding: 20px;
+    padding: clamp(10px, 2vw, 20px);
+    min-width: 560px;
+    max-width: min(90vw, 1200px);
 }
 
 /* Title */
@@ -36,10 +38,14 @@ h1 {
 
 /* Canvas Styling */
 #gameCanvas {
+    width: 560px !important;
+    height: 620px !important;
     border: 3px solid #2121ff;
     border-radius: 5px;
     box-shadow: 0 0 20px rgba(33, 33, 255, 0.5);
     background-color: #000;
+    transform: scale(var(--canvas-scale, 1));
+    transform-origin: top center;
 }
 
 /* Game Info */
@@ -53,10 +59,5 @@ h1 {
 @media (max-width: 768px) {
     h1 {
         font-size: 2em;
-    }
-
-    #gameCanvas {
-        max-width: 100%;
-        height: auto;
     }
 }

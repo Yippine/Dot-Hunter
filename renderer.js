@@ -60,11 +60,20 @@ const RendererModule = (function() {
         };
     }
 
+    /**
+     * Get canvas element
+     * @returns {HTMLCanvasElement} Canvas element
+     */
+    function getCanvas() {
+        return canvas;
+    }
+
     // Public API
     return {
         init,
         clear,
         getContext,
-        getDimensions
+        getDimensions,
+        getCanvas
     };
 })();
