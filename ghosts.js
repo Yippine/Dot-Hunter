@@ -75,6 +75,24 @@ const GhostsModule = (function() {
         powerModeActive = false;
         powerModeTimer = 0;
 
+        // Force first direction calculation to break initialization deadlock
+        // Without this, ghosts start with direction = NONE and moving = false,
+        // causing them to wait indefinitely at spawn positions
+        ghosts.forEach(ghost => {
+            // Get player starting position (center of map at row 23, col 14)
+            const playerStartPos = { row: 23, col: 14 };
+
+            // Calculate first chase direction
+            const firstDirection = chooseBestDirection(ghost, playerStartPos);
+
+            if (firstDirection !== DIRECTIONS.NONE) {
+                ghost.direction = firstDirection;
+                ghost.targetPosition.row = ghost.position.row + firstDirection.row;
+                ghost.targetPosition.col = ghost.position.col + firstDirection.col;
+                ghost.moving = true;
+            }
+        });
+
         console.log(`Initialized ${ghosts.length} ghosts`);
     }
 
@@ -221,7 +239,9 @@ const GhostsModule = (function() {
         const atTarget = ghost.position.row === ghost.targetPosition.row &&
                         ghost.position.col === ghost.targetPosition.col;
 
-        if (!atTarget) {
+        // Allow AI update only when at target OR when direction is NONE (safety check)
+        // The direction = NONE check ensures ghosts can recover from initialization deadlock
+        if (!atTarget && ghost.direction !== DIRECTIONS.NONE) {
             return; // Still moving to target, wait until aligned
         }
 
