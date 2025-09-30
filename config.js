@@ -35,6 +35,8 @@ const CONFIG = {
         col: 14
     },
     PLAYER_COLOR: '#ffff00',
+    LOOKAHEAD_DISTANCE: 8, // Pixels ahead to check for direction change
+    ALIGNMENT_TOLERANCE: 5, // Pixel tolerance for grid alignment
 
     // Direction constants
     DIRECTIONS: {

@@ -2,7 +2,7 @@
 const PlayerModule = (function() {
     'use strict';
 
-    const { CELL_SIZE, DIRECTIONS, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_COLOR, PLAYER_START_POS } = CONFIG;
+    const { CELL_SIZE, DIRECTIONS, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_COLOR, PLAYER_START_POS, LOOKAHEAD_DISTANCE, ALIGNMENT_TOLERANCE } = CONFIG;
 
     // Player state
     let player = {
@@ -82,29 +82,40 @@ const PlayerModule = (function() {
     }
 
     /**
+     * Check if player is near target position (for early direction change)
+     * @returns {boolean} True if near target position
+     */
+    function isNearTarget() {
+        const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
+        const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
+
+        return Math.abs(player.position.x - targetX) < LOOKAHEAD_DISTANCE &&
+               Math.abs(player.position.y - targetY) < LOOKAHEAD_DISTANCE;
+    }
+
+    /**
      * Check if player has reached target position (grid-aligned)
      * @returns {boolean} True if at target position
      */
     function isAtTarget() {
-        const tolerance = 1; // Pixel tolerance for alignment
         const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
         const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
 
-        return Math.abs(player.position.x - targetX) < tolerance &&
-               Math.abs(player.position.y - targetY) < tolerance;
+        return Math.abs(player.position.x - targetX) < ALIGNMENT_TOLERANCE &&
+               Math.abs(player.position.y - targetY) < ALIGNMENT_TOLERANCE;
     }
 
     /**
-     * Try to change direction (smooth turning)
+     * Try to change direction (smooth turning with lookahead)
      */
     function tryChangeDirection() {
         if (player.direction.next === DIRECTIONS.NONE) {
             return;
         }
 
-        // Check if we're at grid alignment
-        if (!isAtTarget()) {
-            return; // Wait until aligned to change direction
+        // Check if we're near target (lookahead) or at target
+        if (!isNearTarget()) {
+            return; // Wait until near target to change direction
         }
 
         // Try to move in the next direction
@@ -117,10 +128,14 @@ const PlayerModule = (function() {
             player.targetPosition.row = nextRow;
             player.targetPosition.col = nextCol;
             player.moving = true;
-        }
 
-        // Clear next direction after attempting
-        player.direction.next = DIRECTIONS.NONE;
+            // Clear next direction after successful change
+            player.direction.next = DIRECTIONS.NONE;
+        } else if (isAtTarget()) {
+            // At target but can't turn, clear next direction
+            player.direction.next = DIRECTIONS.NONE;
+        }
+        // If near but not at target and can't turn, keep next direction for retry
     }
 
     /**
