@@ -227,7 +227,10 @@ const PlayerModule = (function() {
                 // Future: Add score increment
             } else if (eatenDot.type === CONFIG.POWER_PELLET) {
                 console.log('Ate a power pellet!');
-                // Future: Trigger ghost vulnerable state
+                // Trigger ghost vulnerable state
+                if (typeof GhostsModule !== 'undefined') {
+                    GhostsModule.activatePowerMode();
+                }
             }
 
             // Check if all dots eaten
@@ -278,11 +281,33 @@ const PlayerModule = (function() {
     }
 
     /**
+     * Get current player position
+     * @returns {Object} Position {row, col, x, y}
+     */
+    function getPosition() {
+        return {
+            row: player.position.row,
+            col: player.position.col,
+            x: player.position.x,
+            y: player.position.y
+        };
+    }
+
+    /**
      * Get current player state (for debugging)
      * @returns {Object} Player state
      */
     function getState() {
         return player;
+    }
+
+    /**
+     * Handle player death
+     */
+    function die() {
+        console.log('Player died!');
+        // Reset to starting position
+        init();
     }
 
     // Public API
@@ -291,6 +316,8 @@ const PlayerModule = (function() {
         update,
         render,
         handleInput,
-        getState
+        getPosition,
+        getState,
+        die
     };
 })();

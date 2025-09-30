@@ -25,6 +25,9 @@ const Game = (function() {
             // Initialize player at starting position
             PlayerModule.init();
 
+            // Initialize ghosts
+            GhostsModule.init();
+
             // Setup keyboard controls
             window.addEventListener('keydown', handleKeyPress);
 
@@ -123,7 +126,24 @@ const Game = (function() {
         // Update player movement and state
         PlayerModule.update(deltaTime);
 
-        // Future: Update ghost AI, game state, etc.
+        // Get player position for ghost AI and collision detection
+        const playerPos = PlayerModule.getPosition();
+
+        // Update ghost AI and movement
+        GhostsModule.update(deltaTime, playerPos);
+
+        // Check collisions between player and ghosts
+        const collision = GhostsModule.checkPlayerCollisions(playerPos);
+
+        if (collision.playerEaten) {
+            console.log('Player was caught by', collision.ghost.name);
+            PlayerModule.die();
+            // Reset ghosts as well
+            GhostsModule.reset();
+        } else if (collision.ghostEaten) {
+            console.log('Player ate', collision.ghost.name);
+            // Future: Add score increment
+        }
     }
 
     /**
@@ -139,10 +159,13 @@ const Game = (function() {
         // Render dots and power pellets
         DotsModule.renderDots(ctx);
 
+        // Render ghosts (before player for proper layering)
+        GhostsModule.render(ctx);
+
         // Render player
         PlayerModule.render(ctx);
 
-        // Future: Render ghosts, UI, effects, etc.
+        // Future: Render UI, effects, etc.
     }
 
     /**
