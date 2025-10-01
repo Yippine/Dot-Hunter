@@ -2,7 +2,7 @@
 const PlayerModule = (function() {
     'use strict';
 
-    const { CELL_SIZE, DIRECTIONS, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_COLOR, PLAYER_START_POS, LOOKAHEAD_DISTANCE, ALIGNMENT_TOLERANCE } = CONFIG;
+    const { CELL_SIZE, DIRECTIONS, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_COLOR, PLAYER_START_POS, LOOKAHEAD_DISTANCE, ALIGNMENT_TOLERANCE, STRICT_ALIGNMENT_TOLERANCE } = CONFIG;
 
     // Player state
     let player = {
@@ -13,8 +13,7 @@ const PlayerModule = (function() {
             y: 0
         },
         direction: {
-            current: DIRECTIONS.NONE,
-            next: DIRECTIONS.NONE
+            current: DIRECTIONS.NONE
         },
         speed: PLAYER_SPEED,
         moving: false,
@@ -22,6 +21,7 @@ const PlayerModule = (function() {
             row: 0,
             col: 0
         },
+        inputQueue: [], // Queue for buffering player input (max size: 1)
         animationState: {
             mouthAngle: 0,
             mouthDirection: 1 // 1 = opening, -1 = closing
@@ -43,7 +43,7 @@ const PlayerModule = (function() {
         player.targetPosition.col = startCol;
 
         player.direction.current = DIRECTIONS.NONE;
-        player.direction.next = DIRECTIONS.NONE;
+        player.inputQueue = [];
 
         player.moving = false;
 
@@ -55,20 +55,65 @@ const PlayerModule = (function() {
      * @param {string} key - Key pressed
      */
     function handleInput(key) {
+        let direction = null;
         switch (key) {
             case 'ArrowUp':
-                player.direction.next = DIRECTIONS.UP;
+                direction = DIRECTIONS.UP;
                 break;
             case 'ArrowDown':
-                player.direction.next = DIRECTIONS.DOWN;
+                direction = DIRECTIONS.DOWN;
                 break;
             case 'ArrowLeft':
-                player.direction.next = DIRECTIONS.LEFT;
+                direction = DIRECTIONS.LEFT;
                 break;
             case 'ArrowRight':
-                player.direction.next = DIRECTIONS.RIGHT;
+                direction = DIRECTIONS.RIGHT;
                 break;
         }
+        if (direction) {
+            enqueueInput(direction);
+        }
+    }
+
+    /**
+     * Enqueue player input direction (max queue size: 1)
+     * @param {Object} direction - Direction object
+     */
+    function enqueueInput(direction) {
+        // Don't queue if same as current direction (redundant input)
+        if (direction === player.direction.current) return;
+
+        // Clear queue and add new input (max size: 1)
+        player.inputQueue = [{
+            direction: direction,
+            timestamp: performance.now()
+        }];
+    }
+
+    /**
+     * Dequeue and validate input from queue
+     * @returns {Object|null} Valid direction object or null
+     */
+    function dequeueValid() {
+        if (player.inputQueue.length === 0) return null;
+
+        const input = player.inputQueue[0];
+        const age = performance.now() - input.timestamp;
+
+        // Clear if timeout (200ms)
+        if (age > 200) {
+            player.inputQueue = [];
+            return null;
+        }
+
+        return input.direction;
+    }
+
+    /**
+     * Clear input queue
+     */
+    function clearQueue() {
+        player.inputQueue = [];
     }
 
     /**
@@ -106,36 +151,98 @@ const PlayerModule = (function() {
     }
 
     /**
-     * Try to change direction (smooth turning with lookahead)
+     * Check if player is strictly aligned to grid center (for precise turning)
+     * @returns {boolean} True if strictly aligned
+     */
+    function isStrictlyAligned() {
+        const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
+        const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
+
+        return Math.abs(player.position.x - targetX) < STRICT_ALIGNMENT_TOLERANCE &&
+               Math.abs(player.position.y - targetY) < STRICT_ALIGNMENT_TOLERANCE;
+    }
+
+    /**
+     * Check if player can be force-aligned (very close to target)
+     * @returns {boolean} True if can force align
+     */
+    function canForceAlign() {
+        const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
+        const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
+
+        const distance = Math.sqrt(
+            Math.pow(player.position.x - targetX, 2) +
+            Math.pow(player.position.y - targetY, 2)
+        );
+
+        // Only allow force align if very close (< 3px)
+        return distance < 3;
+    }
+
+    /**
+     * Force align player to grid center
+     * @returns {boolean} True if aligned successfully
+     */
+    function forceAlign() {
+        if (!canForceAlign()) return false;
+
+        // Snap to grid center
+        player.position.x = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
+        player.position.y = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
+        player.position.row = player.targetPosition.row;
+        player.position.col = player.targetPosition.col;
+
+        return true;
+    }
+
+    /**
+     * Try to change direction (smooth turning with lookahead and strict alignment)
      */
     function tryChangeDirection() {
-        if (player.direction.next === DIRECTIONS.NONE) {
+        // 1. Check input queue
+        if (player.inputQueue.length === 0) {
+            return; // No input queued
+        }
+
+        const input = player.inputQueue[0];
+        const queuedDirection = input.direction;
+
+        // 2. Check timeout
+        const age = performance.now() - input.timestamp;
+        if (age > 200) {
+            clearQueue(); // Input too old
             return;
         }
 
-        // Check if we're near target (lookahead) or at target
+        // 3. Check if we can attempt turn
+        // Use lookahead to detect early, but only execute at alignment
         if (!isNearTarget()) {
-            return; // Wait until near target to change direction
+            return; // Not close enough yet, keep input in queue
         }
 
-        // Try to move in the next direction
-        const nextRow = player.position.row + player.direction.next.row;
-        const nextCol = player.position.col + player.direction.next.col;
+        // 4. Wait for alignment before executing turn
+        // This prevents corner cutting while still being responsive
+        if (!isAtTarget()) {
+            return; // Wait for alignment, keep input in queue
+        }
+
+        // 5. Try to move in the queued direction
+        const nextRow = player.position.row + queuedDirection.row;
+        const nextCol = player.position.col + queuedDirection.col;
 
         if (!checkCollision(nextRow, nextCol)) {
             // Valid move, change direction
-            player.direction.current = player.direction.next;
+            player.direction.current = queuedDirection;
             player.targetPosition.row = nextRow;
             player.targetPosition.col = nextCol;
             player.moving = true;
 
-            // Clear next direction after successful change
-            player.direction.next = DIRECTIONS.NONE;
-        } else if (isAtTarget()) {
-            // At target but can't turn, clear next direction
-            player.direction.next = DIRECTIONS.NONE;
+            // Clear queue after successful change
+            clearQueue();
+        } else {
+            // Can't turn (wall blocking), clear queue
+            clearQueue();
         }
-        // If near but not at target and can't turn, keep next direction for retry
     }
 
     /**
