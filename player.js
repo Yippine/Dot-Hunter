@@ -127,15 +127,15 @@ const PlayerModule = (function() {
     }
 
     /**
-     * Check if player is near target position (for early direction change)
-     * @returns {boolean} True if near target position
+     * Check if player is near current grid position (for early direction change detection)
+     * @returns {boolean} True if near current grid position
      */
     function isNearTarget() {
-        const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
-        const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
+        const gridX = player.position.col * CELL_SIZE + CELL_SIZE / 2;
+        const gridY = player.position.row * CELL_SIZE + CELL_SIZE / 2;
 
-        return Math.abs(player.position.x - targetX) < LOOKAHEAD_DISTANCE &&
-               Math.abs(player.position.y - targetY) < LOOKAHEAD_DISTANCE;
+        return Math.abs(player.position.x - gridX) < LOOKAHEAD_DISTANCE &&
+               Math.abs(player.position.y - gridY) < LOOKAHEAD_DISTANCE;
     }
 
     /**
