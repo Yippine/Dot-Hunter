@@ -86,15 +86,15 @@ const PlayerModule = (function() {
     }
 
     /**
-     * Check if player is near current grid position (for early direction change detection)
-     * @returns {boolean} True if near current grid position
+     * Check if player is near target position (for early direction change detection)
+     * @returns {boolean} True if near target position
      */
     function isNearTarget() {
-        const gridX = player.position.col * CELL_SIZE + CELL_SIZE / 2;
-        const gridY = player.position.row * CELL_SIZE + CELL_SIZE / 2;
+        const targetX = player.targetPosition.col * CELL_SIZE + CELL_SIZE / 2;
+        const targetY = player.targetPosition.row * CELL_SIZE + CELL_SIZE / 2;
 
-        return Math.abs(player.position.x - gridX) < LOOKAHEAD_DISTANCE &&
-               Math.abs(player.position.y - gridY) < LOOKAHEAD_DISTANCE;
+        return Math.abs(player.position.x - targetX) < LOOKAHEAD_DISTANCE &&
+               Math.abs(player.position.y - targetY) < LOOKAHEAD_DISTANCE;
     }
 
     /**
@@ -110,22 +110,12 @@ const PlayerModule = (function() {
     }
 
     /**
-     * Try to change direction (simplified lookahead mechanism)
+     * Try to change direction (called when at grid center)
      */
     function tryChangeDirection() {
         // Check if there's a pending direction change
-        if (!player.direction.next) {
+        if (player.direction.next === null) {
             return; // No input pending
-        }
-
-        // Only attempt direction change when near grid center
-        if (!isNearTarget()) {
-            return; // Not close enough yet, keep input pending
-        }
-
-        // Wait for alignment before executing turn (prevents corner cutting)
-        if (!isAtTarget()) {
-            return; // Wait for alignment
         }
 
         // Validate the next cell is walkable
@@ -140,7 +130,7 @@ const PlayerModule = (function() {
             player.moving = true;
         }
 
-        // Clear pending direction (whether successful or blocked)
+        // Always clear pending direction after attempting
         player.direction.next = null;
     }
 
@@ -152,10 +142,7 @@ const PlayerModule = (function() {
         // Update mouth animation
         updateAnimation(deltaTime);
 
-        // Try to change direction if requested
-        tryChangeDirection();
-
-        // Check if at target and not moving
+        // Check if at target (reached grid center)
         if (isAtTarget()) {
             // Snap to exact grid position
             player.position.row = player.targetPosition.row;
@@ -166,7 +153,10 @@ const PlayerModule = (function() {
             // Check for dot collision
             eatDot();
 
-            // Try to continue moving in current direction
+            // Try to change direction if player requested it
+            tryChangeDirection();
+
+            // If tryChangeDirection didn't set a new target, continue in current direction
             if (player.direction.current !== DIRECTIONS.NONE) {
                 const nextRow = player.position.row + player.direction.current.row;
                 const nextCol = player.position.col + player.direction.current.col;
