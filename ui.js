@@ -134,6 +134,25 @@ const UIRenderer = (function() {
     }
 
     /**
+     * Render START SCREEN message
+     * @param {CanvasRenderingContext2D} ctx - Canvas context
+     */
+    function renderStartScreen(ctx) {
+        renderCenterMessage(ctx, 'PRESS ANY KEY TO START', UI_CONFIG.COLORS.READY);
+
+        // Add instruction text
+        const canvasWidth = MAP_WIDTH * CELL_SIZE;
+        const canvasHeight = MAP_HEIGHT * CELL_SIZE;
+        const centerX = canvasWidth / 2;
+        const centerY = (canvasHeight + UI_CONFIG.TOP_BAR_HEIGHT) / 2;
+
+        ctx.font = `${UI_CONFIG.FONT_SIZE_SMALL}px ${UI_CONFIG.FONT_FAMILY}`;
+        ctx.fillStyle = UI_CONFIG.COLORS.TEXT;
+        ctx.textAlign = 'center';
+        ctx.fillText('Use arrow keys to move', centerX, centerY + 40);
+    }
+
+    /**
      * Render PAUSED message
      * @param {CanvasRenderingContext2D} ctx - Canvas context
      */
@@ -227,6 +246,9 @@ const UIRenderer = (function() {
 
         // Render state-specific messages
         switch (gameState.state) {
+            case 'start_screen':
+                renderStartScreen(ctx);
+                break;
             case 'ready':
                 renderReady(ctx);
                 break;
@@ -268,6 +290,7 @@ const UIRenderer = (function() {
         renderTopBar,
         renderCenterMessage,
         renderReady,
+        renderStartScreen,
         renderPaused,
         renderGameOver,
         renderLevelComplete,

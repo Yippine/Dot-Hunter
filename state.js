@@ -4,6 +4,7 @@ const StateManager = (function() {
 
     // Game states enum
     const GAME_STATE = {
+        START_SCREEN: 'start_screen',
         READY: 'ready',
         PLAYING: 'playing',
         PAUSED: 'paused',
@@ -22,9 +23,9 @@ const StateManager = (function() {
      * Initialize state manager
      */
     function init() {
-        currentState = GAME_STATE.READY;
+        currentState = GAME_STATE.START_SCREEN;
         previousState = null;
-        stateHistory = [GAME_STATE.READY];
+        stateHistory = [GAME_STATE.START_SCREEN];
         readyTimer = READY_DURATION;
         console.log('StateManager initialized:', currentState);
     }
@@ -71,6 +72,7 @@ const StateManager = (function() {
     function validateTransition(from, to) {
         // Define valid transitions
         const validTransitions = {
+            [GAME_STATE.START_SCREEN]: [GAME_STATE.READY],
             [GAME_STATE.READY]: [GAME_STATE.PLAYING],
             [GAME_STATE.PLAYING]: [GAME_STATE.PAUSED, GAME_STATE.GAME_OVER, GAME_STATE.LEVEL_COMPLETE],
             [GAME_STATE.PAUSED]: [GAME_STATE.PLAYING, GAME_STATE.GAME_OVER],
@@ -112,6 +114,9 @@ const StateManager = (function() {
         switch (state) {
             case GAME_STATE.READY:
                 readyTimer = READY_DURATION;
+                if (typeof PlayerModule !== 'undefined') {
+                    PlayerModule.init(CONFIG.PLAYER_START_POS.row, CONFIG.PLAYER_START_POS.col, CONFIG.DIRECTIONS.LEFT);
+                }
                 break;
             case GAME_STATE.PLAYING:
                 readyTimer = 0;
@@ -144,6 +149,12 @@ const StateManager = (function() {
      * @returns {boolean} True if input was handled
      */
     function handleInput(key) {
+        // Handle START_SCREEN - any key starts game
+        if (currentState === GAME_STATE.START_SCREEN) {
+            transitionTo(GAME_STATE.READY);
+            return true;
+        }
+
         switch (key) {
             case 'p':
             case 'P':

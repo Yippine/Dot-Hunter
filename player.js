@@ -32,8 +32,9 @@ const PlayerModule = (function() {
      * Initialize player at starting position
      * @param {number} startRow - Starting row
      * @param {number} startCol - Starting column
+     * @param {Object} initialDirection - Initial direction (optional)
      */
-    function init(startRow = PLAYER_START_POS.row, startCol = PLAYER_START_POS.col) {
+    function init(startRow = PLAYER_START_POS.row, startCol = PLAYER_START_POS.col, initialDirection = DIRECTIONS.NONE) {
         player.position.row = startRow;
         player.position.col = startCol;
         player.position.x = startCol * CELL_SIZE + CELL_SIZE / 2;
@@ -42,7 +43,7 @@ const PlayerModule = (function() {
         player.targetPosition.row = startRow;
         player.targetPosition.col = startCol;
 
-        player.direction.current = DIRECTIONS.NONE;
+        player.direction.current = initialDirection;
         player.direction.next = null;
 
         player.moving = false;
