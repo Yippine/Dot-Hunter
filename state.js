@@ -72,7 +72,7 @@ const StateManager = (function() {
     function validateTransition(from, to) {
         // Define valid transitions
         const validTransitions = {
-            [GAME_STATE.START_SCREEN]: [GAME_STATE.READY],
+            [GAME_STATE.START_SCREEN]: [GAME_STATE.PLAYING],
             [GAME_STATE.READY]: [GAME_STATE.PLAYING],
             [GAME_STATE.PLAYING]: [GAME_STATE.PAUSED, GAME_STATE.GAME_OVER, GAME_STATE.LEVEL_COMPLETE],
             [GAME_STATE.PAUSED]: [GAME_STATE.PLAYING, GAME_STATE.GAME_OVER],
@@ -149,9 +149,17 @@ const StateManager = (function() {
      * @returns {boolean} True if input was handled
      */
     function handleInput(key) {
-        // Handle START_SCREEN - any key starts game
+        // Handle START_SCREEN - any key starts game immediately
         if (currentState === GAME_STATE.START_SCREEN) {
-            transitionTo(GAME_STATE.READY);
+            // Set initial direction before starting
+            if (typeof PlayerModule !== 'undefined') {
+                PlayerModule.init(
+                    CONFIG.PLAYER_START_POS.row,
+                    CONFIG.PLAYER_START_POS.col,
+                    CONFIG.DIRECTIONS.LEFT
+                );
+            }
+            transitionTo(GAME_STATE.PLAYING);
             return true;
         }
 
