@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>經典小精靈 (Pac-Man)</title>
+    <style>
+        body {
+            background-color: #111;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            touch-action: none; /* 防止手機滑動捲動頁面 */
+        }
+
+        h1 {
+            margin: 10px 0;
+            font-size: 24px;
+            color: #FFD700;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            border: 4px solid #222;
+            border-radius: 4px;
+        }
+
+        canvas {
+            display: block;
+            background-color: #000;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10;
+            transition: opacity 0.3s;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .title-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: #FFD700;
+            margin-bottom: 20px;
+            text-align: center;
+            animation: pulse 1.5s infinite;
+        }
+
+        .info-text {
+            font-size: 18px;
+            color: #fff;
+            margin-bottom: 30px;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 20px;
+            background-color: #FFD700;
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #b59b00;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #b59b00;
+        }
+
+        #score-board {
+            margin-top: 10px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* 控制說明圖示 */
+        .controls-hint {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .key {
+            border: 1px solid #666;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>PAC-MAN 小精靈</h1>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="440" height="520"></canvas>
+
+        <!-- 開始/結束 介面 -->
+        <div id="ui-layer">
+            <div id="ui-title" class="title-text">READY?</div>
+            <div id="ui-message" class="info-text">
+                使用方向鍵控制小精靈<br>吃掉所有點點即可過關
+            </div>
+            <button id="start-btn" onclick="startGame()">開始遊戲</button>
+
+            <div class="controls-hint">
+                <div>電腦: <span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span></div>
+                <div>手機: 滑動螢幕</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="score-board">分數: <span id="score">0</span></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const uiLayer = document.getElementById('ui-layer');
+        const uiTitle = document.getElementById('ui-title');
+        const uiMessage = document.getElementById('ui-message');
+        const startBtn = document.getElementById('start-btn');
+
+        // 遊戲設定
+        const TILE_SIZE = 20; // 每一格的大小
+        const PACMAN_SPEED = 2; // 必須能整除 TILE_SIZE
+        const GHOST_SPEED = 2; // 必須能整除 TILE_SIZE
+
+        // 地圖定義: 1=牆壁, 0=豆子, 2=空地(無豆子), 3=小精靈重生點, 4=鬼重生點
+        // 22x26 Grid
+        const rawMap = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,1,1,0,1],
+            [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+            [1,1,1,1,1,0,1,1,1,2,1,1,2,1,1,1,0,1,1,1,1,1],
+            [2,2,2,2,1,0,1,2,2,2,2,2,2,2,2,1,0,1,2,2,2,2],
+            [1,1,1,1,1,0,1,2,1,1,2,2,1,1,2,1,0,1,1,1,1,1],
+            [2,2,2,2,2,0,2,2,1,4,4,4,1,2,2,2,0,2,2,2,2,2], // 鬼屋入口
+            [1,1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1,1],
+            [2,2,2,2,1,0,1,2,2,2,3,2,2,2,1,0,1,2,2,2,2], // 3 是小精靈起點
+            [1,1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,1,1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,1,1,0,0,0,1,0,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,1,0,1,1,0,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        // 遊戲狀態變數
+        let map = [];
+        let score = 0;
+        let gameLoopId;
+        let isGameRunning = false;
+        let totalDots = 0;
+
+        // 角色物件
+        let pacman = {
+            x: 0, y: 0,
+            dir: 0, // 0:右, 1:下, 2:左, 3:上
+            nextDir: 0,
+            radius: 8,
+            mouthOpen: 0,
+            mouthSpeed: 0.2,
+            color: '#FFD700'
+        };
+
+        let ghosts = [];
+        const ghostColors = ['#FF0000', '#FFB8FF', '#00FFFF']; // 紅, 粉, 青
+
+        // 方向定義
+        const DIRECTIONS = [
+            { x: 1, y: 0 },  // 右
+            { x: 0, y: 1 },  // 下
+            { x: -1, y: 0 }, // 左
+            { x: 0, y: -1 }  // 上
+        ];
+
+        // 初始化遊戲
+        function initGame() {
+            score = 0;
+            scoreEl.innerText = score;
+            map = JSON.parse(JSON.stringify(rawMap)); // 深拷貝地圖
+            ghosts = [];
+            totalDots = 0;
+
+            // 解析地圖並放置角色
+            for (let r = 0; r < map.length; r++) {
+                for (let c = 0; c < map[0].length; c++) {
+                    if (map[r][c] === 0) totalDots++;
+
+                    if (map[r][c] === 3) {
+                        pacman.x = c * TILE_SIZE + TILE_SIZE / 2;
+                        pacman.y = r * TILE_SIZE + TILE_SIZE / 2;
+                        pacman.dir = 0; // 預設向右
+                        pacman.nextDir = 0;
+                        map[r][c] = 2; // 設為空地
+                    }
+
+                    if (map[r][c] === 4) {
+                        // 產生幽靈
+                        let gIndex = ghosts.length % ghostColors.length;
+                        ghosts.push({
+                            x: c * TILE_SIZE + TILE_SIZE / 2,
+                            y: r * TILE_SIZE + TILE_SIZE / 2,
+                            dir: 3, // 預設向上出門
+                            color: ghostColors[gIndex],
+                            moving: true
+                        });
+                        map[r][c] = 2; // 設為空地
+                    }
+                }
+            }
+        }
+
+        // 開始遊戲流程
+        function startGame() {
+            uiLayer.classList.add('hidden');
+            initGame();
+            isGameRunning = true;
+            gameLoop();
+        }
+
+        function gameOver(win) {
+            isGameRunning = false;
+            cancelAnimationFrame(gameLoopId);
+            uiLayer.classList.remove('hidden');
+
+            if (win) {
+                uiTitle.innerText = "YOU WIN!";
+                uiTitle.style.color = "#4CAF50";
+                uiMessage.innerText = `太厲害了！\n最終分數: ${score}`;
+            } else {
+                uiTitle.innerText = "GAME OVER";
+                uiTitle.style.color = "#F44336";
+                uiMessage.innerText = `被抓到了！\n最終分數: ${score}`;
+            }
+            startBtn.innerText = "再玩一次";
+        }
+
+        // 遊戲主迴圈
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            update();
+            draw();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // 更新邏輯
+        function update() {
+            movePacman();
+            moveGhosts();
+            checkCollisions();
+
+            // 勝利判定
+            if (totalDots === 0) {
+                gameOver(true);
+            }
+        }
+
+        // 移動小精靈
+        function movePacman() {
+            // 嘴巴動畫
+            pacman.mouthOpen += pacman.mouthSpeed;
+            if (pacman.mouthOpen > 0.25 || pacman.mouthOpen < 0) {
+                pacman.mouthSpeed = -pacman.mouthSpeed;
+            }
+
+            // 嘗試轉向 (必須在格子中心附近)
+            if (pacman.nextDir !== pacman.dir) {
+                if (canMove(pacman.x, pacman.y, pacman.nextDir)) {
+                    // 檢查是否在格子中心 (容許小誤差)
+                    if (isAtCenter(pacman.x, pacman.y)) {
+                        pacman.x = getCenter(pacman.x);
+                        pacman.y = getCenter(pacman.y);
+                        pacman.dir = pacman.nextDir;
+                    }
+                }
+            }
+
+            // 實際移動
+            if (canMove(pacman.x, pacman.y, pacman.dir)) {
+                pacman.x += DIRECTIONS[pacman.dir].x * PACMAN_SPEED;
+                pacman.y += DIRECTIONS[pacman.dir].y * PACMAN_SPEED;
+            } else {
+                // 撞牆修正位置到中心
+                if (isAtCenter(pacman.x, pacman.y)) {
+                    // 停止
+                }
+            }
+
+            // 吃豆子判定
+            let gridX = Math.floor(pacman.x / TILE_SIZE);
+            let gridY = Math.floor(pacman.y / TILE_SIZE);
+
+            // 邊界保護
+            if (gridY >= 0 && gridY < map.length && gridX >= 0 && gridX < map[0].length) {
+                if (map[gridY][gridX] === 0) {
+                    map[gridY][gridX] = 2; // 變成空地
+                    score += 10;
+                    totalDots--;
+                    scoreEl.innerText = score;
+                }
+            }
+
+            // 左右通道傳送 (如果地圖左右有開口) - 雖然此地圖目前是封閉的，預留邏輯
+            if (pacman.x < 0) pacman.x = canvas.width;
+            if (pacman.x > canvas.width) pacman.x = 0;
+        }
+
+        // 移動幽靈 (簡單AI)
+        function moveGhosts() {
+            ghosts.forEach(ghost => {
+                // 到達交叉路口或撞牆時改變方向
+                let center = isAtCenter(ghost.x, ghost.y);
+
+                if (center) {
+                    // 獲取可用方向
+                    let possibleDirs = [];
+                    [0, 1, 2, 3].forEach(d => {
+                        // 這裡使用寬鬆判定，只看下一格是不是牆壁
+                        let nextX = Math.floor(ghost.x / TILE_SIZE) + DIRECTIONS[d].x;
+                        let nextY = Math.floor(ghost.y / TILE_SIZE) + DIRECTIONS[d].y;
+                        if (map[nextY][nextX] !== 1) {
+                            // 避免 180度回頭，除非只有死路
+                            if (d !== (ghost.dir + 2) % 4) {
+                                possibleDirs.push(d);
+                            }
+                        }
+                    });
+
+                    if (possibleDirs.length === 0) {
+                        // 死路，必須回頭
+                        possibleDirs.push((ghost.dir + 2) % 4);
+                    }
+
+                    // 隨機決策：如果有超過一個路口，有機會轉彎；如果前方撞牆，必須轉彎
+                    let nextX = Math.floor(ghost.x / TILE_SIZE) + DIRECTIONS[ghost.dir].x;
+                    let nextY = Math.floor(ghost.y / TILE_SIZE) + DIRECTIONS[ghost.dir].y;
+                    let blocked = (map[nextY][nextX] === 1);
+
+                    if (blocked || possibleDirs.length > 1) {
+                        // 如果前方被擋住，或者到了岔路口有一定機率轉向
+                         if (blocked || Math.random() < 0.3) {
+                             // 確保在中心點轉向
+                            ghost.x = getCenter(ghost.x);
+                            ghost.y = getCenter(ghost.y);
+                            let randIndex = Math.floor(Math.random() * possibleDirs.length);
+                            ghost.dir = possibleDirs[randIndex];
+                         }
+                    }
+                }
+
+                ghost.x += DIRECTIONS[ghost.dir].x * GHOST_SPEED;
+                ghost.y += DIRECTIONS[ghost.dir].y * GHOST_SPEED;
+            });
+        }
+
+        function checkCollisions() {
+            ghosts.forEach(ghost => {
+                let dist = Math.hypot(pacman.x - ghost.x, pacman.y - ghost.y);
+                if (dist < TILE_SIZE * 0.8) {
+                    gameOver(false);
+                }
+            });
+        }
+
+        // 輔助函數：是否能移動到該方向
+        function canMove(x, y, dir) {
+            // 預測下一幀的位置
+            let nextX = x + DIRECTIONS[dir].x * PACMAN_SPEED;
+            let nextY = y + DIRECTIONS[dir].y * PACMAN_SPEED;
+
+            // 獲取該位置所在的格子 (四個角)
+            // 我們檢查角色的 "邊框" 是否碰到牆
+            let offset = TILE_SIZE / 2 - 1; // 稍微縮小一點判定範圍
+
+            let col1 = Math.floor((nextX - offset) / TILE_SIZE);
+            let col2 = Math.floor((nextX + offset) / TILE_SIZE);
+            let row1 = Math.floor((nextY - offset) / TILE_SIZE);
+            let row2 = Math.floor((nextY + offset) / TILE_SIZE);
+
+            // 邊界檢查
+            if (row1 < 0 || row2 >= map.length || col1 < 0 || col2 >= map[0].length) return false;
+
+            // 只要四個角碰到牆壁就算不能走
+            if (map[row1][col1] === 1 || map[row1][col2] === 1 ||
+                map[row2][col1] === 1 || map[row2][col2] === 1) {
+                return false;
+            }
+            return true;
+        }
+
+        // 輔助函數：是否在格子中心
+        function isAtCenter(x, y) {
+            let cx = (Math.floor(x / TILE_SIZE) * TILE_SIZE) + TILE_SIZE / 2;
+            let cy = (Math.floor(y / TILE_SIZE) * TILE_SIZE) + TILE_SIZE / 2;
+            return Math.abs(x - cx) < PACMAN_SPEED && Math.abs(y - cy) < PACMAN_SPEED;
+        }
+
+        // 輔助函數：獲取最近的格子中心座標
+        function getCenter(pos) {
+            return (Math.floor(pos / TILE_SIZE) * TILE_SIZE) + TILE_SIZE / 2;
+        }
+
+        // 繪圖
+        function draw() {
+            // 清空畫布
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 畫地圖
+            for (let r = 0; r < map.length; r++) {
+                for (let c = 0; c < map[0].length; c++) {
+                    let x = c * TILE_SIZE;
+                    let y = r * TILE_SIZE;
+
+                    if (map[r][c] === 1) {
+                        // 牆壁
+                        ctx.fillStyle = '#1919A6'; // 經典深藍色
+                        // 畫一個略小的矩形，做出空心牆壁的感覺
+                        ctx.fillRect(x + 2, y + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                    } else if (map[r][c] === 0) {
+                        // 豆子
+                        ctx.fillStyle = '#FFB8AE';
+                        ctx.beginPath();
+                        ctx.arc(x + TILE_SIZE/2, y + TILE_SIZE/2, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            // 畫小精靈
+            ctx.save();
+            ctx.translate(pacman.x, pacman.y);
+            // 旋轉畫布以匹配方向
+            let rotation = 0;
+            if (pacman.dir === 1) rotation = Math.PI / 2;
+            if (pacman.dir === 2) rotation = Math.PI;
+            if (pacman.dir === 3) rotation = -Math.PI / 2;
+            ctx.rotate(rotation);
+
+            ctx.fillStyle = pacman.color;
+            ctx.beginPath();
+            // 嘴巴開合計算
+            let startAngle = 0.2 * Math.PI * Math.sin(pacman.mouthOpen * Math.PI);
+            if(startAngle < 0) startAngle = 0; // 確保不會變形
+
+            // 繪製扇形 (小精靈本體)
+            // context.arc(x, y, r, sAngle, eAngle, counterclockwise)
+            // 這裡因為已經 translate 了，所以圓心是 0,0
+            ctx.arc(0, 0, pacman.radius, startAngle, Math.PI * 2 - startAngle);
+            ctx.lineTo(0, 0);
+            ctx.fill();
+            ctx.restore();
+
+            // 畫幽靈
+            ghosts.forEach(ghost => {
+                ctx.fillStyle = ghost.color;
+                let gx = ghost.x;
+                let gy = ghost.y;
+                let r = pacman.radius;
+
+                ctx.beginPath();
+                ctx.arc(gx, gy - 2, r, Math.PI, 0);
+                ctx.lineTo(gx + r, gy + r);
+                // 鋸齒狀底部
+                for(let i=1; i<=3; i++) {
+                    ctx.lineTo(gx + r - (2*r/3)*i, gy + r - (i%2==0 ? 0 : 3));
+                }
+                ctx.lineTo(gx - r, gy + r);
+                ctx.fill();
+
+                // 眼睛
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(gx - 3, gy - 4, 3, 0, Math.PI*2);
+                ctx.arc(gx + 3, gy - 4, 3, 0, Math.PI*2);
+                ctx.fill();
+
+                // 眼珠
+                ctx.fillStyle = 'blue';
+                ctx.beginPath();
+                // 根據方向移動眼珠
+                let ex = DIRECTIONS[ghost.dir].x * 1.5;
+                let ey = DIRECTIONS[ghost.dir].y * 1.5;
+                ctx.arc(gx - 3 + ex, gy - 4 + ey, 1.5, 0, Math.PI*2);
+                ctx.arc(gx + 3 + ex, gy - 4 + ey, 1.5, 0, Math.PI*2);
+                ctx.fill();
+            });
+        }
+
+        // 鍵盤控制
+        window.addEventListener('keydown', (e) => {
+            if (!isGameRunning && e.key === "Enter" && !uiLayer.classList.contains('hidden')) {
+                 startGame();
+                 return;
+            }
+
+            // 防止方向鍵捲動頁面
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault();
+            }
+
+            switch(e.key) {
+                case 'ArrowRight': pacman.nextDir = 0; break;
+                case 'ArrowDown':  pacman.nextDir = 1; break;
+                case 'ArrowLeft':  pacman.nextDir = 2; break;
+                case 'ArrowUp':    pacman.nextDir = 3; break;
+            }
+        });
+
+        // 觸控控制 (Swipe)
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        canvas.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', function(e) {
+            let touchEndX = e.changedTouches[0].screenX;
+            let touchEndY = e.changedTouches[0].screenY;
+            handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+        }, {passive: false});
+
+        function handleSwipe(sx, sy, ex, ey) {
+            let dx = ex - sx;
+            let dy = ey - sy;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+                // 水平滑動
+                if (Math.abs(dx) > 30) { // 閾值
+                    if (dx > 0) pacman.nextDir = 0; // 右
+                    else pacman.nextDir = 2; // 左
+                }
+            } else {
+                // 垂直滑動
+                if (Math.abs(dy) > 30) {
+                    if (dy > 0) pacman.nextDir = 1; // 下
+                    else pacman.nextDir = 3; // 上
+                }
+            }
+        }
+
+        // 初始畫面渲染一次背景
+        // 讓玩家知道這裡有個遊戲
+        ctx.fillStyle = 'black';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#333';
+        ctx.font = "20px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Press Start", canvas.width/2, canvas.height/2);
+
+    </script>
+</body>
+</html>
